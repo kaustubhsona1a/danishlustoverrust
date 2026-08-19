@@ -42,6 +42,7 @@ export default function AdminSettings() {
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, key: 'logo' | 'homeHeroImage' | 'homeHeroMobileImage' | 'aboutImage') => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
+      e.target.value = '';
       setIsCompressing(true);
       setErrorText('');
       try {
@@ -77,6 +78,7 @@ export default function AdminSettings() {
   const handleDeliveryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
+      e.target.value = '';
       setIsCompressing(true);
       setErrorText('');
       try {

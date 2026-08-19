@@ -1,15 +1,18 @@
 import { useParams, Link } from 'react-router-dom';
 import { formatPrice } from '../data/mockData';
-import { CheckCircle2, ChevronLeft, MapPin, Search, Share2, Copy, Check, X, Mail, Instagram } from 'lucide-react';
-import React, { useState, useEffect } from 'react';
+import { CheckCircle2, ChevronLeft, ChevronRight, MapPin, Search, Share2, Copy, Check, X, Mail, Instagram, ZoomIn, Maximize2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useVehicles } from '../context/VehicleContext';
 import { Helmet } from 'react-helmet-async';
+import PhotoLightbox from '../components/PhotoLightbox';
 
 export default function VehicleDetails() {
   const { vehicles, loading } = useVehicles();
   const { id } = useParams();
   const car = vehicles.find(v => v.id === id);
   const [activeImage, setActiveImage] = useState(0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
 
   // EMI Calculator State Variables (hooks declared unconditionally)
   const [interestRate, setInterestRate] = useState<number>(8.5);
@@ -105,8 +108,43 @@ export default function VehicleDetails() {
 
   const pageTitle = `${car.year} ${car.make} ${car.model} ${car.variant} | Lust Over Rust`;
   const pageDescription = `Exquisite luxury pre-owned ${car.year} ${car.make} ${car.model}. Contact us today to arrange a viewing at our Showroom. ${car.description ? car.description.substring(0, 100) + '...' : ''}`;
-  const [isFullscreen, setIsFullscreen] = useState(false);
   const ogImageUrl = car.images?.[0] || "https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&q=80&w=800";
+
+  const handlePrevImage = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!car?.images || car.images.length === 0) return;
+    setActiveImage((prev) => (prev > 0 ? prev - 1 : car.images.length - 1));
+  };
+
+  const handleNextImage = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!car?.images || car.images.length === 0) return;
+    setActiveImage((prev) => (prev < car.images.length - 1 ? prev + 1 : 0));
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      const touch = e.touches[0];
+      touchStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStartRef.current || e.changedTouches.length === 0) return;
+    const touch = e.changedTouches[0];
+    const deltaX = touch.clientX - touchStartRef.current.x;
+    const deltaY = touch.clientY - touchStartRef.current.y;
+    const elapsed = Date.now() - touchStartRef.current.time;
+
+    if (Math.abs(deltaX) > 40 && Math.abs(deltaX) > Math.abs(deltaY) * 1.3 && elapsed < 500) {
+      if (deltaX < 0) {
+        handleNextImage();
+      } else {
+        handlePrevImage();
+      }
+    }
+    touchStartRef.current = null;
+  };
 
   return (
     <div className="min-h-screen bg-transparent text-zinc-750 py-12 font-sans selection:bg-[#00C0FF] selection:text-white z-10 relative">
@@ -122,25 +160,14 @@ export default function VehicleDetails() {
         <meta name="twitter:image" content={ogImageUrl} />
       </Helmet>
       
-      {isFullscreen && (
-        <div 
-          className="fixed inset-0 z-50 bg-zinc-950/95 backdrop-blur-sm flex items-center justify-center p-4 cursor-zoom-out"
-          onClick={() => setIsFullscreen(false)}
-        >
-          <img 
-            src={car.images?.[activeImage] || "https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&q=80&w=800"} 
-            alt="Fullscreen Viewer" 
-            className="max-w-full max-h-full object-contain cursor-default"
-            onClick={(e) => e.stopPropagation()}
-          />
-          <button 
-            className="absolute top-6 right-6 text-zinc-500 hover:text-white bg-black/50 hover:bg-black/80 border border-white/5 rounded-full p-2.5 transition-all font-mono text-[10px] tracking-widest uppercase font-bold"
-            onClick={(e) => { e.stopPropagation(); setIsFullscreen(false); }}
-          >
-            [X] Close
-          </button>
-        </div>
-      )}
+      {/* Fullscreen Interactive Zoom Lightbox with Pinch-to-Zoom, Pan, and Swipe */}
+      <PhotoLightbox
+        images={car.images || []}
+        initialIndex={activeImage}
+        isOpen={isFullscreen}
+        onClose={() => setIsFullscreen(false)}
+        title={`${car.year} ${car.make} ${car.model}`}
+      />
 
       <div className="container mx-auto max-w-7xl px-4">
         
@@ -155,11 +182,56 @@ export default function VehicleDetails() {
             {/* Gallery */}
             <div className="space-y-4 shadow-sm rounded-2xl overflow-hidden bg-zinc-900/55 p-3 md:p-4 border border-zinc-900/80 backdrop-blur-md">
               <div 
-                className="relative h-[40vh] sm:h-[45vh] md:h-[55vh] overflow-hidden bg-zinc-950/20 rounded-xl group border border-zinc-800/80 cursor-zoom-in"
+                className="relative h-[40vh] sm:h-[45vh] md:h-[55vh] overflow-hidden bg-zinc-950/40 rounded-xl group border border-zinc-800/80 cursor-zoom-in select-none"
                 onClick={() => setIsFullscreen(true)}
+                onTouchStart={handleTouchStart}
+                onTouchEnd={handleTouchEnd}
               >
-                <img src={car.images?.[activeImage] || "https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&q=80&w=800"} alt={car.make} className="w-full h-full object-contain transition-all duration-500 opacity-95 group-hover:opacity-100" />
+                <img 
+                  src={car.images?.[activeImage] || "https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&q=80&w=800"} 
+                  alt={car.make} 
+                  className="w-full h-full object-contain transition-all duration-300 opacity-95 group-hover:opacity-100" 
+                  draggable={false}
+                />
+
+                {/* Floating Previous Image Button */}
+                {car.images && car.images.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={handlePrevImage}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-zinc-950/70 hover:bg-[#00C0FF] text-white hover:text-zinc-950 border border-white/10 hover:border-transparent flex items-center justify-center transition-all opacity-80 hover:opacity-100 shadow-lg backdrop-blur-sm z-10"
+                    title="Previous Photo"
+                  >
+                    <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
+                  </button>
+                )}
+
+                {/* Floating Next Image Button */}
+                {car.images && car.images.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={handleNextImage}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-zinc-950/70 hover:bg-[#00C0FF] text-white hover:text-zinc-950 border border-white/10 hover:border-transparent flex items-center justify-center transition-all opacity-80 hover:opacity-100 shadow-lg backdrop-blur-sm z-10"
+                    title="Next Photo"
+                  >
+                    <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />
+                  </button>
+                )}
+
+                {/* Image Counter Badge */}
+                <div className="absolute top-3 left-3 flex items-center gap-2 z-10">
+                  <span className="px-2.5 py-1 rounded-full bg-zinc-950/80 border border-white/10 text-white font-mono text-[11px] font-bold backdrop-blur-sm shadow-sm">
+                    {activeImage + 1} / {car.images?.length || 1}
+                  </span>
+                </div>
+
+                {/* Tap to Zoom Badge */}
+                <div className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-950/80 hover:bg-zinc-900 border border-[#00C0FF]/40 text-[#00C0FF] text-[11px] font-mono font-bold tracking-wider uppercase transition-all backdrop-blur-sm shadow-md z-10">
+                  <ZoomIn className="w-3.5 h-3.5" />
+                  <span>Tap to Zoom</span>
+                </div>
               </div>
+
               <div className="flex gap-3 md:gap-4 overflow-x-auto pb-2 md:pb-4 custom-scrollbar">
                 {(car.images || []).map((img, i) => (
                   <button 
