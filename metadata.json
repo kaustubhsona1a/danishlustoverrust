@@ -1,0 +1,6 @@
+{
+  "name": "Lust Over Rust Pvt. Ltd.",
+  "description": "Explore premium pre-owned vehicles at Lust Over Rust Pvt. Ltd. Quality inventory, transparent pricing and an enthusiast-focused buying experience.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
