@@ -478,9 +478,6 @@ export default function AdminAddVehicle() {
                 <div className="absolute top-2 left-2 bg-zinc-950/90 text-white text-[8px] font-bold px-1.5 py-0.5 rounded font-mono border border-white/10 shadow-sm pointer-events-none">
                   {i === 0 ? 'THUMBNAIL' : `#${i + 1}`}
                 </div>
-                <div className="absolute bottom-2 left-2 bg-zinc-950/80 text-[#00C0FF] text-[8px] font-bold px-1.5 py-0.5 rounded font-mono border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none flex items-center gap-1">
-                  <ZoomIn className="w-2.5 h-2.5" /> ZOOM
-                </div>
                 <button 
                   type="button" 
                   onClick={(e) => { e.stopPropagation(); removeImage(i); }}

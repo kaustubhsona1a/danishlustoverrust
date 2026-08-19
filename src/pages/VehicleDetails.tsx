@@ -1,6 +1,6 @@
 import { useParams, Link } from 'react-router-dom';
 import { formatPrice } from '../data/mockData';
-import { CheckCircle2, ChevronLeft, ChevronRight, MapPin, Search, Share2, Copy, Check, X, Mail, Instagram, ZoomIn, Maximize2 } from 'lucide-react';
+import { CheckCircle2, ChevronLeft, MapPin, Search, Share2, Copy, Check, X, Mail, Instagram } from 'lucide-react';
 import React, { useState, useEffect, useRef } from 'react';
 import { useVehicles } from '../context/VehicleContext';
 import { Helmet } from 'react-helmet-async';
@@ -182,7 +182,7 @@ export default function VehicleDetails() {
             {/* Gallery */}
             <div className="space-y-4 shadow-sm rounded-2xl overflow-hidden bg-zinc-900/55 p-3 md:p-4 border border-zinc-900/80 backdrop-blur-md">
               <div 
-                className="relative h-[40vh] sm:h-[45vh] md:h-[55vh] overflow-hidden bg-zinc-950/40 rounded-xl group border border-zinc-800/80 cursor-zoom-in select-none"
+                className="relative h-[40vh] sm:h-[45vh] md:h-[55vh] overflow-hidden bg-zinc-950/40 rounded-xl group border border-zinc-800/80 cursor-pointer select-none"
                 onClick={() => setIsFullscreen(true)}
                 onTouchStart={handleTouchStart}
                 onTouchEnd={handleTouchEnd}
@@ -194,41 +194,11 @@ export default function VehicleDetails() {
                   draggable={false}
                 />
 
-                {/* Floating Previous Image Button */}
-                {car.images && car.images.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={handlePrevImage}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-zinc-950/70 hover:bg-[#00C0FF] text-white hover:text-zinc-950 border border-white/10 hover:border-transparent flex items-center justify-center transition-all opacity-80 hover:opacity-100 shadow-lg backdrop-blur-sm z-10"
-                    title="Previous Photo"
-                  >
-                    <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
-                  </button>
-                )}
-
-                {/* Floating Next Image Button */}
-                {car.images && car.images.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={handleNextImage}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-zinc-950/70 hover:bg-[#00C0FF] text-white hover:text-zinc-950 border border-white/10 hover:border-transparent flex items-center justify-center transition-all opacity-80 hover:opacity-100 shadow-lg backdrop-blur-sm z-10"
-                    title="Next Photo"
-                  >
-                    <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />
-                  </button>
-                )}
-
                 {/* Image Counter Badge */}
                 <div className="absolute top-3 left-3 flex items-center gap-2 z-10">
                   <span className="px-2.5 py-1 rounded-full bg-zinc-950/80 border border-white/10 text-white font-mono text-[11px] font-bold backdrop-blur-sm shadow-sm">
                     {activeImage + 1} / {car.images?.length || 1}
                   </span>
-                </div>
-
-                {/* Tap to Zoom Badge */}
-                <div className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-950/80 hover:bg-zinc-900 border border-[#00C0FF]/40 text-[#00C0FF] text-[11px] font-mono font-bold tracking-wider uppercase transition-all backdrop-blur-sm shadow-md z-10">
-                  <ZoomIn className="w-3.5 h-3.5" />
-                  <span>Tap to Zoom</span>
                 </div>
               </div>
 
