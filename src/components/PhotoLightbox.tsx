@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { X, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { X, ZoomIn, ZoomOut, RotateCcw, Loader2 } from 'lucide-react';
+import { useRenderableImage } from '../lib/imageUtils';
 
 interface PhotoLightboxProps {
   images: string[];
@@ -20,6 +21,7 @@ export default function PhotoLightbox({
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [swipeOffset, setSwipeOffset] = useState(0);
+  const [dragDownOffset, setDragDownOffset] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
 
   // Gesture tracking refs
@@ -35,6 +37,7 @@ export default function PhotoLightbox({
       setCurrentIndex(initialIndex);
       resetZoom();
       setSwipeOffset(0);
+      setDragDownOffset(0);
     }
   }, [isOpen, initialIndex]);
 
@@ -107,7 +110,7 @@ export default function PhotoLightbox({
     };
   }, [isOpen]);
 
-  // Touch Handlers for Swipe and Pure Pinch-to-Zoom (No tap zoom)
+  // Touch Handlers for Swipe Left/Right, Pull-Down-to-Dismiss, and Pure Pinch-to-Zoom
   const handleTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length === 1) {
       const touch = e.touches[0];
@@ -155,19 +158,24 @@ export default function PhotoLightbox({
           y: panStartRef.current.posY + deltaY
         });
       } else if (scale === 1 && touchStartRef.current) {
-        // Swipe tracking when at 1x
         const deltaX = touch.clientX - touchStartRef.current.x;
         const deltaY = touch.clientY - touchStartRef.current.y;
 
-        // If movement is predominantly horizontal, track swipe offset
-        if (Math.abs(deltaX) > Math.abs(deltaY)) {
+        // Determine if pulling down (dismiss) or swiping left/right (next/prev)
+        if (deltaY > 0 && Math.abs(deltaY) > Math.abs(deltaX) * 1.2) {
+          // Pull down to dismiss
+          setDragDownOffset(deltaY);
+          setSwipeOffset(0);
+        } else if (Math.abs(deltaX) > Math.abs(deltaY)) {
+          // Swipe left/right
           setSwipeOffset(deltaX);
+          setDragDownOffset(0);
         }
       }
     }
   };
 
-  const handleTouchEnd = (e: React.TouchEvent) => {
+  const handleTouchEnd = () => {
     // If pinch finished, snap scale if below threshold
     if (pinchStartRef.current) {
       if (scale <= 1.08) {
@@ -182,7 +190,17 @@ export default function PhotoLightbox({
 
     panStartRef.current = null;
 
-    // Handle horizontal swipe navigation
+    // Check pull-down dismiss
+    if (scale === 1 && dragDownOffset > 0) {
+      if (dragDownOffset > 85) {
+        onClose();
+        setDragDownOffset(0);
+        touchStartRef.current = null;
+        return;
+      }
+    }
+
+    // Check horizontal swipe navigation
     if (scale === 1 && touchStartRef.current) {
       const elapsed = Date.now() - touchStartRef.current.time;
       const isFastFlick = elapsed < 350 && Math.abs(swipeOffset) > 30;
@@ -199,6 +217,7 @@ export default function PhotoLightbox({
 
     setIsTransitioning(true);
     setSwipeOffset(0);
+    setDragDownOffset(0);
     setTimeout(() => setIsTransitioning(false), 200);
     touchStartRef.current = null;
   };
@@ -242,13 +261,19 @@ export default function PhotoLightbox({
     }
   };
 
+  const currentRawImage = images[currentIndex] || images[0] || '';
+  const { displayUrl, isLoading: isHeicConverting } = useRenderableImage(currentRawImage);
+
   if (!isOpen || images.length === 0) return null;
 
-  const currentImage = images[currentIndex] || images[0];
+  const backdropOpacity = dragDownOffset > 0 
+    ? Math.max(0.4, 0.95 - (dragDownOffset / 400)) 
+    : 0.95;
 
   return (
     <div 
-      className="fixed inset-0 z-50 bg-black/95 backdrop-blur-md flex flex-col justify-between select-none touch-none animate-fadeIn"
+      className="fixed inset-0 z-50 flex flex-col justify-between select-none touch-none animate-fadeIn transition-colors duration-150"
+      style={{ backgroundColor: `rgba(0, 0, 0, ${backdropOpacity})` }}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
     >
@@ -311,7 +336,7 @@ export default function PhotoLightbox({
         </div>
       </div>
 
-      {/* Main Image Stage - Clean Swiping & Pinch-Only Zoom */}
+      {/* Main Image Stage */}
       <div 
         className="relative flex-grow flex items-center justify-center overflow-hidden p-2 sm:p-6"
         onTouchStart={handleTouchStart}
@@ -320,7 +345,13 @@ export default function PhotoLightbox({
         onMouseDown={handleMouseDown}
         onWheel={handleWheel}
       >
-        {/* Scalable Image */}
+        {isHeicConverting && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-30">
+            <Loader2 className="w-8 h-8 text-[#00C0FF] animate-spin" />
+          </div>
+        )}
+
+        {/* Scalable & Swipeable Image */}
         <div 
           className={`relative max-w-full max-h-full flex items-center justify-center ${
             isTransitioning ? 'transition-transform duration-200 ease-out' : ''
@@ -328,13 +359,13 @@ export default function PhotoLightbox({
           style={{
             transform: scale > 1 
               ? `translate(${position.x}px, ${position.y}px) scale(${scale})` 
-              : `translate(${swipeOffset}px, 0px)`,
+              : `translate(${swipeOffset}px, ${dragDownOffset}px)`,
             cursor: scale > 1 ? (isDraggingMouse.current ? 'grabbing' : 'grab') : 'default',
             touchAction: 'none'
           }}
         >
           <img
-            src={currentImage}
+            src={displayUrl || currentRawImage}
             alt={title || `Vehicle Photo ${currentIndex + 1}`}
             className="max-w-[94vw] max-h-[74vh] object-contain rounded-lg shadow-2xl pointer-events-none"
             draggable={false}
@@ -346,24 +377,48 @@ export default function PhotoLightbox({
       {images.length > 1 && (
         <div className="p-3 sm:p-4 bg-gradient-to-t from-black/90 via-black/60 to-transparent z-20 overflow-x-auto custom-scrollbar flex items-center justify-center gap-2 sm:gap-3">
           {images.map((img, i) => (
-            <button
+            <ThumbnailItem
               key={`${img}-${i}`}
-              type="button"
-              onClick={() => {
+              imgUrl={img}
+              index={i}
+              isSelected={currentIndex === i}
+              onSelect={() => {
                 setCurrentIndex(i);
                 resetZoom();
               }}
-              className={`flex-shrink-0 w-14 sm:w-20 h-10 sm:h-14 rounded-lg overflow-hidden border-2 transition-all duration-200 ${
-                currentIndex === i
-                  ? 'border-[#00C0FF] scale-105 opacity-100 shadow-md shadow-[#00C0FF]/30'
-                  : 'border-white/10 opacity-50 hover:opacity-80'
-              }`}
-            >
-              <img src={img} alt={`Thumbnail ${i + 1}`} className="w-full h-full object-cover" />
-            </button>
+            />
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+function ThumbnailItem({
+  imgUrl,
+  index,
+  isSelected,
+  onSelect
+}: {
+  key?: React.Key;
+  imgUrl: string;
+  index: number;
+  isSelected: boolean;
+  onSelect: () => void;
+}) {
+  const { displayUrl } = useRenderableImage(imgUrl);
+
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={`flex-shrink-0 w-14 sm:w-20 h-10 sm:h-14 rounded-lg overflow-hidden border-2 transition-all duration-200 ${
+        isSelected
+          ? 'border-[#00C0FF] scale-105 opacity-100 shadow-md shadow-[#00C0FF]/30'
+          : 'border-white/10 opacity-50 hover:opacity-80'
+      }`}
+    >
+      <img src={displayUrl || imgUrl} alt={`Thumbnail ${index + 1}`} className="w-full h-full object-cover" />
+    </button>
   );
 }

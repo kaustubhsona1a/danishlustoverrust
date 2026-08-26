@@ -5,6 +5,7 @@ import { useVehicles } from '../../context/VehicleContext';
 import { Vehicle } from '../../data/mockData';
 import { uploadImageToStorage } from '../../lib/supabase';
 import PhotoLightbox from '../../components/PhotoLightbox';
+import { useRenderableImage } from '../../lib/imageUtils';
 
 const DRAFT_STORAGE_KEY = 'dealer_add_vehicle_draft_v2';
 
@@ -463,30 +464,18 @@ export default function AdminAddVehicle() {
 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-4">
             {images.map((img, i) => (
-              <div 
-                key={`${img}-${i}`} 
-                draggable
+              <AdminPhotoCard
+                key={`${img}-${i}`}
+                imgUrl={img}
+                index={i}
+                isDragged={draggedIdx === i}
                 onDragStart={(e) => handleDragStart(e, i)}
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, i)}
                 onDragEnd={handleDragEnd}
                 onClick={() => setPreviewLightboxIndex(i)}
-                className={`relative aspect-video rounded-xl overflow-hidden border ${draggedIdx === i ? 'border-[#00C0FF] opacity-50' : 'border-white/10'} group cursor-pointer hover:border-[#00C0FF]/60 transition-all bg-zinc-900`}
-                title="Click to view full photo & zoom"
-              >
-                <img src={img} alt={`Preview ${i}`} className="w-full h-full object-cover pointer-events-none" />
-                <div className="absolute top-2 left-2 bg-zinc-950/90 text-white text-[8px] font-bold px-1.5 py-0.5 rounded font-mono border border-white/10 shadow-sm pointer-events-none">
-                  {i === 0 ? 'THUMBNAIL' : `#${i + 1}`}
-                </div>
-                <button 
-                  type="button" 
-                  onClick={(e) => { e.stopPropagation(); removeImage(i); }}
-                  className="absolute top-2 right-2 bg-red-600/90 hover:bg-red-500 text-white rounded-full p-1.5 shadow-lg opacity-90 sm:opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                  title="Remove photo"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
+                onRemove={() => removeImage(i)}
+              />
             ))}
 
             {images.length < 20 && (
@@ -568,3 +557,55 @@ export default function AdminAddVehicle() {
     </form>
   );
 }
+
+function AdminPhotoCard({
+  imgUrl,
+  index,
+  isDragged,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
+  onClick,
+  onRemove
+}: {
+  key?: React.Key;
+  imgUrl: string;
+  index: number;
+  isDragged: boolean;
+  onDragStart: (e: React.DragEvent) => void;
+  onDragOver: (e: React.DragEvent) => void;
+  onDrop: (e: React.DragEvent) => void;
+  onDragEnd: () => void;
+  onClick: () => void;
+  onRemove: () => void;
+}) {
+  const { displayUrl } = useRenderableImage(imgUrl);
+
+  return (
+    <div 
+      draggable
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      onDragEnd={onDragEnd}
+      onClick={onClick}
+      className={`relative aspect-video rounded-xl overflow-hidden border ${isDragged ? 'border-[#00C0FF] opacity-50' : 'border-white/10'} group cursor-pointer hover:border-[#00C0FF]/60 transition-all bg-zinc-900`}
+      title="Click to view full photo & zoom"
+    >
+      <img src={displayUrl || imgUrl} alt={`Preview ${index}`} className="w-full h-full object-cover pointer-events-none" />
+      <div className="absolute top-2 left-2 bg-zinc-950/90 text-white text-[8px] font-bold px-1.5 py-0.5 rounded font-mono border border-white/10 shadow-sm pointer-events-none">
+        {index === 0 ? 'THUMBNAIL' : `#${index + 1}`}
+      </div>
+      <button 
+        type="button" 
+        onClick={(e) => { e.stopPropagation(); onRemove(); }}
+        className="absolute top-2 right-2 bg-red-600/90 hover:bg-red-500 text-white rounded-full p-1.5 shadow-lg opacity-90 sm:opacity-0 group-hover:opacity-100 transition-opacity z-10"
+        title="Remove photo"
+      >
+        <X className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+}
+

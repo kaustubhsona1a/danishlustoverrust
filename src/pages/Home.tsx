@@ -3,6 +3,7 @@ import { ArrowRight, ShieldCheck, Banknote, FileText, Star, MapPin, Phone, Car, 
 import { formatPrice, MOCK_REVIEWS } from '../data/mockData';
 import { useVehicles } from '../context/VehicleContext';
 import { Helmet } from 'react-helmet-async';
+import { useRenderableImage } from '../lib/imageUtils';
 
 const CARD_THEMES = [
   {
@@ -100,7 +101,10 @@ export default function Home() {
                   <Link key={car.id} to={`/inventory/${car.id}`} className="group block h-full">
                     <div className={`bg-zinc-900/55 border ${theme.border} ${theme.glow} backdrop-blur-md transition-all duration-500 flex flex-col h-full overflow-hidden hover:-translate-y-1.5 rounded-2xl shadow-sm hover:shadow-md`}>
                       <div className="relative aspect-[4/3] md:aspect-auto md:h-64 overflow-hidden bg-zinc-950/20">
-                        <img src={car.images?.[0] || "https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&q=80&w=800"} alt={`${car.make} ${car.model}`} loading="lazy" className="w-full h-full object-cover sm:object-contain bg-zinc-950/10 transition-transform duration-1000 group-hover:scale-[1.02] opacity-95" />
+                        <HomeVehicleCardImage 
+                          imgUrl={car.images?.[0]} 
+                          alt={`${car.make} ${car.model}`} 
+                        />
                         <div className={`absolute top-4 left-4 text-xs font-extrabold tracking-widest font-mono border py-1 px-3 rounded-lg ${theme.badge}`}>
                           {car.year}
                         </div>
@@ -341,3 +345,24 @@ export default function Home() {
     </div>
   );
 }
+
+function HomeVehicleCardImage({
+  imgUrl,
+  alt
+}: {
+  imgUrl?: string;
+  alt: string;
+}) {
+  const fallback = "https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&q=80&w=800";
+  const { displayUrl } = useRenderableImage(imgUrl || fallback);
+
+  return (
+    <img 
+      src={displayUrl || fallback} 
+      alt={alt} 
+      loading="lazy" 
+      className="w-full h-full object-cover sm:object-contain bg-zinc-950/10 transition-transform duration-1000 group-hover:scale-[1.02] opacity-95" 
+    />
+  );
+}
+

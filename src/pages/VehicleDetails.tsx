@@ -1,18 +1,47 @@
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { formatPrice } from '../data/mockData';
 import { CheckCircle2, ChevronLeft, MapPin, Search, Share2, Copy, Check, X, Mail, Instagram } from 'lucide-react';
 import React, { useState, useEffect, useRef } from 'react';
 import { useVehicles } from '../context/VehicleContext';
 import { Helmet } from 'react-helmet-async';
 import PhotoLightbox from '../components/PhotoLightbox';
+import { useRenderableImage } from '../lib/imageUtils';
 
 export default function VehicleDetails() {
   const { vehicles, loading } = useVehicles();
   const { id } = useParams();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const car = vehicles.find(v => v.id === id);
   const [activeImage, setActiveImage] = useState(0);
-  const [isFullscreen, setIsFullscreen] = useState(false);
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+
+  // Gallery state is synchronized with the browser history via searchParams
+  const isGalleryOpen = searchParams.get('gallery') === 'open';
+
+  const handleOpenGallery = (index?: number) => {
+    if (typeof index === 'number') {
+      setActiveImage(index);
+    }
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set('gallery', 'open');
+        return next;
+      },
+      { replace: false }
+    );
+  };
+
+  const handleCloseGallery = () => {
+    if (searchParams.get('gallery') === 'open') {
+      // Pop the history entry back to the vehicle details page cleanly
+      navigate(-1);
+    }
+  };
+
+  const currentRawUrl = car?.images?.[activeImage] || "https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&q=80&w=800";
+  const { displayUrl: activeImageUrl } = useRenderableImage(currentRawUrl);
 
   // EMI Calculator State Variables (hooks declared unconditionally)
   const [interestRate, setInterestRate] = useState<number>(8.5);
@@ -164,8 +193,8 @@ export default function VehicleDetails() {
       <PhotoLightbox
         images={car.images || []}
         initialIndex={activeImage}
-        isOpen={isFullscreen}
-        onClose={() => setIsFullscreen(false)}
+        isOpen={isGalleryOpen}
+        onClose={handleCloseGallery}
         title={`${car.year} ${car.make} ${car.model}`}
       />
 
@@ -183,12 +212,12 @@ export default function VehicleDetails() {
             <div className="space-y-4 shadow-sm rounded-2xl overflow-hidden bg-zinc-900/55 p-3 md:p-4 border border-zinc-900/80 backdrop-blur-md">
               <div 
                 className="relative h-[40vh] sm:h-[45vh] md:h-[55vh] overflow-hidden bg-zinc-950/40 rounded-xl group border border-zinc-800/80 cursor-pointer select-none"
-                onClick={() => setIsFullscreen(true)}
+                onClick={() => handleOpenGallery(activeImage)}
                 onTouchStart={handleTouchStart}
                 onTouchEnd={handleTouchEnd}
               >
                 <img 
-                  src={car.images?.[activeImage] || "https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&q=80&w=800"} 
+                  src={activeImageUrl || "https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&q=80&w=800"} 
                   alt={car.make} 
                   className="w-full h-full object-contain transition-all duration-300 opacity-95 group-hover:opacity-100" 
                   draggable={false}
@@ -204,13 +233,12 @@ export default function VehicleDetails() {
 
               <div className="flex gap-3 md:gap-4 overflow-x-auto pb-2 md:pb-4 custom-scrollbar">
                 {(car.images || []).map((img, i) => (
-                  <button 
-                    key={img} 
+                  <VehicleGalleryThumbnail
+                    key={img}
+                    imgUrl={img}
+                    isSelected={activeImage === i}
                     onClick={() => setActiveImage(i)}
-                    className={`flex-shrink-0 w-24 sm:w-32 h-18 sm:h-24 overflow-hidden rounded-xl border transition-all duration-300 ${activeImage === i ? 'border-[#00C0FF] scale-[1.02] opacity-100 shadow-md shadow-[#00C0FF]/15' : 'border-zinc-800 opacity-60 hover:opacity-100'}`}
-                  >
-                    <img src={img} alt="Thumbnail" loading="lazy" className="w-full h-full object-cover" />
-                  </button>
+                  />
                 ))}
               </div>
             </div>
@@ -594,3 +622,29 @@ export default function VehicleDetails() {
     </div>
   );
 }
+
+function VehicleGalleryThumbnail({
+  imgUrl,
+  isSelected,
+  onClick
+}: {
+  key?: React.Key;
+  imgUrl: string;
+  isSelected: boolean;
+  onClick: () => void;
+}) {
+  const { displayUrl } = useRenderableImage(imgUrl);
+
+  return (
+    <button 
+      type="button"
+      onClick={onClick}
+      className={`flex-shrink-0 w-24 sm:w-32 h-18 sm:h-24 overflow-hidden rounded-xl border transition-all duration-300 ${
+        isSelected ? 'border-[#00C0FF] scale-[1.02] opacity-100 shadow-md shadow-[#00C0FF]/15' : 'border-zinc-800 opacity-60 hover:opacity-100'
+      }`}
+    >
+      <img src={displayUrl || imgUrl} alt="Thumbnail" loading="lazy" className="w-full h-full object-cover" />
+    </button>
+  );
+}
+

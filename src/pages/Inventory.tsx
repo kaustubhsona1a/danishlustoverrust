@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { formatPrice } from '../data/mockData';
 import { Search, Filter, Car, Gauge, Fuel, Cog, Instagram } from 'lucide-react';
 import { useVehicles } from '../context/VehicleContext';
+import { useRenderableImage } from '../lib/imageUtils';
 
 export default function Inventory() {
   const { vehicles, loading } = useVehicles();
@@ -339,7 +340,10 @@ export default function Inventory() {
                     <Link key={car.id} to={`/inventory/${car.id}`} className="group block h-full">
                       <div className={`bg-zinc-900/55 border border-zinc-900/80 backdrop-blur-md ${hoverStyle} transition-all duration-500 flex flex-col h-full overflow-hidden rounded-2xl shadow-sm hover:shadow-md`}>
                         <div className="relative aspect-[4/3] sm:aspect-video md:aspect-auto md:h-64 overflow-hidden bg-zinc-950/20 animate-fade-in">
-                          <img src={car.images?.[0] || "https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&q=80&w=800"} alt={`${car.make} ${car.model}`} loading="lazy" className="w-full h-full object-contain bg-zinc-950/10 transition-transform duration-1000 group-hover:scale-[1.02] opacity-95" />
+                          <InventoryVehicleCardImage 
+                            imgUrl={car.images?.[0]} 
+                            alt={`${car.make} ${car.model}`} 
+                          />
                           <div className="absolute top-4 left-4 bg-zinc-950/90 text-[#32CD32] border border-zinc-800 px-3 py-1 rounded-lg text-xs font-bold tracking-widest font-mono shadow-sm">
                             {car.year}
                           </div>
@@ -413,3 +417,24 @@ export default function Inventory() {
     </div>
   );
 }
+
+function InventoryVehicleCardImage({
+  imgUrl,
+  alt
+}: {
+  imgUrl?: string;
+  alt: string;
+}) {
+  const fallback = "https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&q=80&w=800";
+  const { displayUrl } = useRenderableImage(imgUrl || fallback);
+
+  return (
+    <img 
+      src={displayUrl || fallback} 
+      alt={alt} 
+      loading="lazy" 
+      className="w-full h-full object-contain bg-zinc-950/10 transition-transform duration-1000 group-hover:scale-[1.02] opacity-95" 
+    />
+  );
+}
+

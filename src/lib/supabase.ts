@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import imageCompression from 'browser-image-compression';
+import heic2any from 'heic2any';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://placeholder.supabase.co';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_ANON || 'placeholder';
@@ -23,6 +24,36 @@ export function handleSupabaseError(error: unknown, operationType: OperationType
   }
   console.error('Supabase Error: ', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
+}
+
+export async function convertHeicToJpeg(file: File): Promise<File> {
+  const isHeic = 
+    file.type === 'image/heic' || 
+    file.type === 'image/heif' || 
+    file.type === 'image/heic-sequence' || 
+    file.type === 'image/heif-sequence' || 
+    /\.(heic|heif)$/i.test(file.name);
+
+  if (!isHeic) return file;
+
+  try {
+    const result = await heic2any({
+      blob: file,
+      toType: 'image/jpeg',
+      quality: 0.88
+    });
+
+    const convertedBlob = Array.isArray(result) ? result[0] : result;
+    const cleanName = file.name.replace(/\.(heic|heif)$/i, '') + '.jpg';
+
+    return new File([convertedBlob], cleanName, {
+      type: 'image/jpeg',
+      lastModified: Date.now()
+    });
+  } catch (error) {
+    console.warn('[HEIC CONVERSION ERROR]', error, 'Attempting standard processing for:', file.name);
+    return file;
+  }
 }
 
 export async function deleteImagesFromStorage(items: any[], bucket: string = 'vehicle-images'): Promise<void> {
@@ -129,12 +160,15 @@ export async function compressImage(
   file: File,
   options?: { maxDimension?: number; targetQuality?: number; isShowcase?: boolean }
 ): Promise<File> {
+  // Step 0: Always convert HEIC / HEIF to JPEG first
+  let workingFile = await convertHeicToJpeg(file);
+
   // Skip compression for non-images or showcase branding assets if requested
   if (
     options?.isShowcase ||
-    (!file.type.startsWith('image/') && !file.name.match(/\.(heic|heif|jpe?g|png|webp|mov)$/i))
+    (!workingFile.type.startsWith('image/') && !workingFile.name.match(/\.(jpe?g|png|webp|mov)$/i))
   ) {
-    return file;
+    return workingFile;
   }
 
   // For car inventory photos, 1280px is optimal HD for retina mobile & desktop galleries
@@ -143,7 +177,7 @@ export async function compressImage(
 
   try {
     let img: HTMLImageElement | null = new Image();
-    let objectUrl = URL.createObjectURL(file);
+    let objectUrl = URL.createObjectURL(workingFile);
     img.src = objectUrl;
 
     const loaded = await new Promise<boolean>((resolve) => {
@@ -153,7 +187,7 @@ export async function compressImage(
       if (img.complete && img.naturalWidth) resolve(true);
     });
 
-    // If direct HTMLImageElement load failed (e.g. raw unconverted HEIC on desktop), try fallback worker
+    // If direct HTMLImageElement load failed, try fallback worker
     if (!loaded || !img.naturalWidth || !img.naturalHeight) {
       URL.revokeObjectURL(objectUrl);
       try {
@@ -163,13 +197,13 @@ export async function compressImage(
           useWebWorker: true,
           initialQuality: 0.75
         };
-        const compressedBlob = await imageCompression(file, options);
-        return new File([compressedBlob], file.name.replace(/\.[^/.]+$/, '') + '.jpg', {
+        const compressedBlob = await imageCompression(workingFile, options);
+        return new File([compressedBlob], workingFile.name.replace(/\.[^/.]+$/, '') + '.jpg', {
           type: 'image/jpeg',
           lastModified: Date.now()
         });
       } catch {
-        return file;
+        return workingFile;
       }
     }
 
@@ -269,15 +303,15 @@ export async function compressImage(
     }
 
     if (!finalBlob) {
-      return file;
+      return workingFile;
     }
 
-    const cleanBaseName = file.name.replace(/\.[^/.]+$/, '');
+    const cleanBaseName = workingFile.name.replace(/\.[^/.]+$/, '');
     const newFileName = `${cleanBaseName}.${finalExt}`;
     return new File([finalBlob], newFileName, { type: finalType, lastModified: Date.now() });
   } catch (err) {
     console.warn('Canvas image compression error, using original file:', err);
-    return file;
+    return workingFile;
   }
 }
 
