@@ -1,5 +1,5 @@
-import React, { Suspense, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import { VehicleProvider } from './context/VehicleContext';
 import { AuthProvider } from './context/AuthContext';
@@ -7,18 +7,18 @@ import ErrorBoundary from './components/ErrorBoundary';
 import CustomerLayout from './layouts/CustomerLayout';
 import AdminLayout from './layouts/AdminLayout';
 
-// Lazy loading pages for Code Splitting (Phase 7: Performance)
-const Home = React.lazy(() => import('./pages/Home'));
-const Inventory = React.lazy(() => import('./pages/Inventory'));
-const VehicleDetails = React.lazy(() => import('./pages/VehicleDetails'));
-const SellCar = React.lazy(() => import('./pages/SellCar'));
-const About = React.lazy(() => import('./pages/About'));
+// Direct page imports to eliminate dynamic chunk cross-origin load errors
+import Home from './pages/Home';
+import Inventory from './pages/Inventory';
+import VehicleDetails from './pages/VehicleDetails';
+import SellCar from './pages/SellCar';
+import About from './pages/About';
 
-const AdminDashboard = React.lazy(() => import('./pages/admin/Dashboard'));
-const AdminInventory = React.lazy(() => import('./pages/admin/Inventory'));
-const AdminAddVehicle = React.lazy(() => import('./pages/admin/AddVehicle'));
-const AdminLeads = React.lazy(() => import('./pages/admin/Leads'));
-const AdminSettings = React.lazy(() => import('./pages/admin/Settings'));
+import AdminDashboard from './pages/admin/Dashboard';
+import AdminInventory from './pages/admin/Inventory';
+import AdminAddVehicle from './pages/admin/AddVehicle';
+import AdminLeads from './pages/admin/Leads';
+import AdminSettings from './pages/admin/Settings';
 
 const LoadingFallback = () => (
   <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center text-[#00C0FF] font-mono tracking-widest text-xs uppercase relative overflow-hidden">
@@ -74,26 +74,24 @@ export default function App() {
           <VehicleProvider>
             <BrowserRouter>
               <ScrollToTop />
-              <Suspense fallback={<LoadingFallback />}>
-                <Routes>
-                  <Route path="/" element={<CustomerLayout />}>
-                    <Route index element={<Home />} />
-                    <Route path="inventory" element={<Inventory />} />
-                    <Route path="inventory/:id" element={<VehicleDetails />} />
-                    <Route path="sell" element={<SellCar />} />
-                    <Route path="about" element={<About />} />
-                  </Route>
+              <Routes>
+                <Route path="/" element={<CustomerLayout />}>
+                  <Route index element={<Home />} />
+                  <Route path="inventory" element={<Inventory />} />
+                  <Route path="inventory/:id" element={<VehicleDetails />} />
+                  <Route path="sell" element={<SellCar />} />
+                  <Route path="about" element={<About />} />
+                </Route>
 
-                  <Route path="/dealer-management" element={<AdminLayout />}>
-                    <Route index element={<AdminDashboard />} />
-                    <Route path="inventory" element={<AdminInventory />} />
-                    <Route path="inventory/add" element={<AdminAddVehicle />} />
-                    <Route path="inventory/edit/:id" element={<AdminAddVehicle />} />
-                    <Route path="leads" element={<AdminLeads />} />
-                    <Route path="settings" element={<AdminSettings />} />
-                  </Route>
-                </Routes>
-              </Suspense>
+                <Route path="/dealer-management" element={<AdminLayout />}>
+                  <Route index element={<AdminDashboard />} />
+                  <Route path="inventory" element={<AdminInventory />} />
+                  <Route path="inventory/add" element={<AdminAddVehicle />} />
+                  <Route path="inventory/edit/:id" element={<AdminAddVehicle />} />
+                  <Route path="leads" element={<AdminLeads />} />
+                  <Route path="settings" element={<AdminSettings />} />
+                </Route>
+              </Routes>
             </BrowserRouter>
           </VehicleProvider>
         </AuthProvider>

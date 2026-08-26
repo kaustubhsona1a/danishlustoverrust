@@ -30,7 +30,7 @@ export async function convertHeicUrlToRenderable(url: string): Promise<string> {
     const converted = await heic2any({
       blob,
       toType: 'image/jpeg',
-      quality: 0.88
+      quality: 0.94
     });
 
     const finalBlob = Array.isArray(converted) ? converted[0] : converted;

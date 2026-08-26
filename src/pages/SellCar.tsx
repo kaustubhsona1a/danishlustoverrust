@@ -83,7 +83,7 @@ export default function SellCar() {
           const options = {
             maxSizeMB: 0.08, // Target ~80kb budget limit to conserve database text spaces safely
             maxWidthOrHeight: 800,
-            useWebWorker: true,
+            useWebWorker: false,
             fileType: 'image/webp'
           };
           const compressedBlob = await imageCompression(file, options);

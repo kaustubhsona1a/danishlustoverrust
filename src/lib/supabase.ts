@@ -21,30 +21,73 @@ export function handleSupabaseError(error: unknown, operationType: OperationType
     error: error instanceof Error ? error.message : String(error),
     operationType,
     path
-  }
+  };
   console.error('Supabase Error: ', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
 }
 
-export async function convertHeicToJpeg(file: File): Promise<File> {
-  const isHeic = 
-    file.type === 'image/heic' || 
-    file.type === 'image/heif' || 
-    file.type === 'image/heic-sequence' || 
-    file.type === 'image/heif-sequence' || 
-    /\.(heic|heif)$/i.test(file.name);
+/**
+ * Accurately detects whether a file is HEIC/HEIF format across all iOS/Android/Desktop environments
+ */
+export async function isHeicFile(file: File): Promise<boolean> {
+  if (!file) return false;
 
+  // 1. Direct MIME type check
+  const type = (file.type || '').toLowerCase();
+  if (
+    type === 'image/heic' ||
+    type === 'image/heif' ||
+    type === 'image/heic-sequence' ||
+    type === 'image/heif-sequence'
+  ) {
+    return true;
+  }
+
+  // 2. Extension check
+  if (/\.(heic|heif)$/i.test(file.name || '')) {
+    return true;
+  }
+
+  // 3. Binary Magic Byte check (for iOS Safari/Camera roll where type is empty or octet-stream)
+  try {
+    const slice = file.slice(0, 32);
+    const buffer = await slice.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    const text = Array.from(bytes).map(b => String.fromCharCode(b)).join('');
+    if (text.includes('ftyp') && (
+      text.includes('heic') ||
+      text.includes('heix') ||
+      text.includes('heif') ||
+      text.includes('mif1') ||
+      text.includes('msf1') ||
+      text.includes('hevc') ||
+      text.includes('hevx')
+    )) {
+      return true;
+    }
+  } catch {
+    // Ignore buffer reading error
+  }
+
+  return false;
+}
+
+/**
+ * Converts HEIC/HEIF files (standard Apple iPhone camera format) to ultra-high-quality JPEG
+ */
+export async function convertHeicToJpeg(file: File): Promise<File> {
+  const isHeic = await isHeicFile(file);
   if (!isHeic) return file;
 
   try {
     const result = await heic2any({
       blob: file,
       toType: 'image/jpeg',
-      quality: 0.88
+      quality: 0.94
     });
 
     const convertedBlob = Array.isArray(result) ? result[0] : result;
-    const cleanName = file.name.replace(/\.(heic|heif)$/i, '') + '.jpg';
+    const cleanName = (file.name || 'photo').replace(/\.(heic|heif)$/i, '') + '.jpg';
 
     return new File([convertedBlob], cleanName, {
       type: 'image/jpeg',
@@ -156,22 +199,24 @@ export async function cleanupLegacyImageVariants(bucket: string = 'vehicle-image
   return { deletedCount, errors };
 }
 
+/**
+ * High quality, super-fast client-side compression pipeline.
+ * Designed for iPhone HEIC, camera RAWs, and multi-megabyte DSLR photos.
+ * Downscales to 1280px max-dimension and compresses to high-clarity WebP/JPEG under 200KB.
+ */
 export async function compressImage(
-  file: File,
+  file: File, 
   options?: { maxDimension?: number; targetQuality?: number; isShowcase?: boolean }
 ): Promise<File> {
-  // Step 0: Always convert HEIC / HEIF to JPEG first
-  let workingFile = await convertHeicToJpeg(file);
+  // Always convert HEIC / HEIF to JPEG first so standard Image() and Canvas can decode properly
+  const workingFile = await convertHeicToJpeg(file);
 
   // Skip compression for non-images or showcase branding assets if requested
-  if (
-    options?.isShowcase ||
-    (!workingFile.type.startsWith('image/') && !workingFile.name.match(/\.(jpe?g|png|webp|mov)$/i))
-  ) {
+  if (options?.isShowcase || (!workingFile.type.startsWith('image/') && !workingFile.name.match(/\.(heic|heif|jpe?g|png|webp|mov)$/i))) {
     return workingFile;
   }
 
-  // For car inventory photos, 1280px is optimal HD for retina mobile & desktop galleries
+  // 1280px is optimal HD for retina mobile & desktop galleries
   const maxDim = options?.maxDimension || 1280;
   const initialQuality = options?.targetQuality || 0.75;
 
@@ -187,27 +232,26 @@ export async function compressImage(
       if (img.complete && img.naturalWidth) resolve(true);
     });
 
-    // If direct HTMLImageElement load failed, try fallback worker
+    // If direct HTMLImageElement load failed (e.g. raw unconverted HEIC on desktop), try fallback
     if (!loaded || !img.naturalWidth || !img.naturalHeight) {
       URL.revokeObjectURL(objectUrl);
       try {
-        const options = {
-          maxSizeMB: 0.2, // 200 KB target
+        const fallbackOptions = {
+          maxSizeMB: 0.2, // ~200 KB target
           maxWidthOrHeight: maxDim,
-          useWebWorker: true,
+          useWebWorker: false,
           initialQuality: 0.75
         };
-        const compressedBlob = await imageCompression(workingFile, options);
-        return new File([compressedBlob], workingFile.name.replace(/\.[^/.]+$/, '') + '.jpg', {
-          type: 'image/jpeg',
-          lastModified: Date.now()
+        const compressedBlob = await imageCompression(workingFile, fallbackOptions);
+        return new File([compressedBlob], workingFile.name.replace(/\.[^/.]+$/, '') + '.jpg', { 
+          type: 'image/jpeg', 
+          lastModified: Date.now() 
         });
       } catch {
         return workingFile;
       }
     }
 
-    // Canvas drawing helper function with bicubic smooth downscaling
     const renderToCanvas = (targetMaxDim: number) => {
       let width = img!.naturalWidth || img!.width;
       let height = img!.naturalHeight || img!.height;
@@ -250,15 +294,14 @@ export async function compressImage(
     let canvas = renderToCanvas(maxDim);
     if (!canvas) {
       URL.revokeObjectURL(objectUrl);
-      return file;
+      return workingFile;
     }
 
-    // Step 1: Initial Quality Pass at 0.75 quality & 1280px dimension
+    // Step 1: Quality pass at 0.75
     let jpegBlob = await getBlob(canvas, 'image/jpeg', initialQuality);
     let webpBlob = await getBlob(canvas, 'image/webp', initialQuality);
 
-    // Step 2: Adaptive Compression Pass
-    // If output exceeds 220 KB, re-encode with quality 0.68
+    // Step 2: If file is larger than 220KB, adaptively reduce quality to 0.68
     if (jpegBlob && jpegBlob.size > 220 * 1024) {
       const tighterJpeg = await getBlob(canvas, 'image/jpeg', 0.68);
       if (tighterJpeg) jpegBlob = tighterJpeg;
@@ -269,8 +312,7 @@ export async function compressImage(
       if (tighterWebp) webpBlob = tighterWebp;
     }
 
-    // Step 3: Resolution Downscaling Pass
-    // If STILL > 240 KB (e.g. photos with complex reflections), downscale dimension to 1080px
+    // Step 3: If STILL larger than 240KB (e.g. high-detail car reflections), downscale to 1080px
     if (jpegBlob && jpegBlob.size > 240 * 1024) {
       const canvas1080 = renderToCanvas(1080);
       if (canvas1080) {
@@ -288,15 +330,8 @@ export async function compressImage(
     let finalExt = 'jpg';
     let finalType = 'image/jpeg';
 
-    // Prefer WebP if valid, smaller than JPEG, and under 220 KB. Otherwise default to JPEG (iOS optimal format)
-    if (
-      webpBlob &&
-      webpBlob.type === 'image/webp' &&
-      webpBlob.size > 0 &&
-      jpegBlob &&
-      webpBlob.size <= jpegBlob.size &&
-      webpBlob.size < 220 * 1024
-    ) {
+    // Pick WebP if it is smaller, valid, and under 220KB; otherwise fallback to crisp JPEG
+    if (webpBlob && webpBlob.type === 'image/webp' && webpBlob.size > 0 && jpegBlob && webpBlob.size <= jpegBlob.size && webpBlob.size < 220 * 1024) {
       finalBlob = webpBlob;
       finalExt = 'webp';
       finalType = 'image/webp';
@@ -309,10 +344,37 @@ export async function compressImage(
     const cleanBaseName = workingFile.name.replace(/\.[^/.]+$/, '');
     const newFileName = `${cleanBaseName}.${finalExt}`;
     return new File([finalBlob], newFileName, { type: finalType, lastModified: Date.now() });
+
   } catch (err) {
-    console.warn('Canvas image compression error, using original file:', err);
+    console.warn('[IMAGE COMPRESS ERROR] Canvas compression failed, using original file:', err);
     return workingFile;
   }
+}
+
+/**
+ * Upload helper that runs compressImage before uploading to storage
+ */
+export async function uploadVehicleImage(file: File, carId: string): Promise<string> {
+  const compressedFile = await compressImage(file);
+  const fileExt = compressedFile.name.split('.').pop() || 'jpg';
+  const fileName = `${carId}/${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
+  
+  const { error: uploadError } = await supabase.storage
+    .from('vehicle-images')
+    .upload(fileName, compressedFile, {
+      cacheControl: '31536000',
+      upsert: false
+    });
+
+  if (uploadError) {
+    throw uploadError;
+  }
+
+  const { data } = supabase.storage
+    .from('vehicle-images')
+    .getPublicUrl(fileName);
+
+  return data.publicUrl;
 }
 
 export async function uploadImageToStorage(file: File, path: string, bucket: string = 'vehicle-images'): Promise<string> {
@@ -321,7 +383,7 @@ export async function uploadImageToStorage(file: File, path: string, bucket: str
   const finalFile = await compressImage(file, { isShowcase });
 
   const fileExt = finalFile.name.split('.').pop() || (finalFile.type === 'image/webp' ? 'webp' : 'jpg');
-  const fileName = `${Math.random()}.${fileExt}`;
+  const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
   const filePath = `${path}/${fileName}`;
 
   const { error: uploadError } = await supabase.storage
@@ -341,4 +403,3 @@ export async function uploadImageToStorage(file: File, path: string, bucket: str
 
   return data.publicUrl;
 }
-
